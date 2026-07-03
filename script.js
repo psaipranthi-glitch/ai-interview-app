@@ -37,8 +37,6 @@ async function generateQuestions(role) {
 
         const data = await res.json();
 
-        console.log("Questions API:", data);
-
         if (!data.candidates || !data.candidates.length) {
             addMessage("bot", "❌ AI failed to generate questions");
             return;
@@ -46,15 +44,19 @@ async function generateQuestions(role) {
 
         let text = data.candidates[0].content.parts[0].text;
 
-        let start = text.indexOf("[");
-        let end = text.lastIndexOf("]");
+        // FIXED: Strips out Markdown wrapper blocks (```json ... ```) safely
+        const cleanText = text.replace(/```json|```/g, "").trim();
+        questions = JSON.parse(cleanText);
 
-        questions = JSON.parse(text.slice(start, end + 1));
+        // FIXED: Guardrail check to verify the AI actually sent back an array
+        if (!Array.isArray(questions) || questions.length === 0) {
+            throw new Error("Invalid format: Expected a JSON array.");
+        }
 
         addMessage("bot", "🧠 Questions generated");
 
     } catch (err) {
-        console.error(err);
+        console.error("Error generating questions:", err);
         addMessage("bot", "❌ Error generating questions");
     }
 }
@@ -98,8 +100,6 @@ Return JSON with score, feedback, improvement, correct_answer`
 
         const data = await res.json();
 
-        console.log("Answer API:", data);
-
         if (!data.candidates || !data.candidates.length) {
             addMessage("bot", "❌ AI failed to evaluate");
             return;
@@ -107,12 +107,13 @@ Return JSON with score, feedback, improvement, correct_answer`
 
         let text = data.candidates[0].content.parts[0].text;
 
-        let start = text.indexOf("{");
-        let end = text.lastIndexOf("}");
+        // FIXED: Strips out Markdown wrapper blocks safely
+        const cleanText = text.replace(/```json|```/g, "").trim();
+        let result = JSON.parse(cleanText);
 
-        let result = JSON.parse(text.slice(start, end + 1));
-
-        scores.push(result.score);
+        // FIXED: Force the score to be treated as a number to prevent string concatenation bugs
+        const numericScore = Number(result.score);
+        scores.push(isNaN(numericScore) ? 0 : numericScore);
 
         addMessage("bot", "📊 Score: " + result.score);
         addMessage("bot", "💬 " + result.feedback);
@@ -121,7 +122,7 @@ Return JSON with score, feedback, improvement, correct_answer`
         setTimeout(showQuestion, 1200);
 
     } catch (err) {
-        console.error(err);
+        console.error("Error evaluating answer:", err);
         addMessage("bot", "❌ API Error");
     }
 };

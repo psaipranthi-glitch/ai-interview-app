@@ -1,118 +1,42 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
-from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
 import google.generativeai as genai
 import os
 
-# Load environment variables
-load_dotenv()
-
-# Configure Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
-# Load Gemini model
-model = genai.GenerativeModel("gemini-2.5-flash")
-
-# Create FastAPI app
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# ---------------- HOME ----------------
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
-@app.get("/")
-def home():
-    return {
-        "message": "Welcome to AI Interview Coach 🚀"
-    }
-
-
-# ---------------- TEST GEMINI ----------------
-
-@app.get("/test")
-def test():
-    response = model.generate_content(
-        "Say hello to the AI Interview Coach."
-    )
-
-    return {
-        "response": response.text
-    }
-
-
-# ---------------- START INTERVIEW ----------------
-
-class InterviewRequest(BaseModel):
-    role: str
-
-
-@app.post("/start")
-def start_interview(request: InterviewRequest):
-
-    prompt = f"""
-You are an experienced technical interviewer.
-
-The candidate is applying for the role of {request.role}.
-
-Ask ONLY ONE interview question.
-
-Do not provide the answer.
-
-Only ask the question.
-"""
-
-    response = model.generate_content(prompt)
-
-    return {
-        "question": response.text
-    }
-
-
-# ---------------- EVALUATE ANSWER ----------------
-
-class AnswerRequest(BaseModel):
-    role: str
-    question: str
-    answer: str
-
-
-@app.post("/answer")
-def evaluate_answer(request: AnswerRequest):
-
-    prompt = f"""
-You are an experienced technical interviewer.
-
-Candidate Role:
-{request.role}
-
-Interview Question:
-{request.question}
-
-Candidate Answer:
-{request.answer}
-
-Evaluate the answer.
-
-Return in the following format.
-
-Score: x/10
-
-Strengths:
-- Point 1
-- Point 2
-
-Weaknesses:
-- Point 1
-- Point 2
-
-Improved Answer:
-Write a better interview answer.
-
-Next Question:
-Ask ONE new interview question.
-"""
-
-    response = model.generate_content(prompt)
-
-    return {
-        "evaluation": response.text
-    }
+@app.post("/api/gemini")
+async def handle_gemini(request_data: dict):
+    try:
+        prompt = request_data.get("prompt", "")
+        
+        # Call the Gemini model
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(prompt)
+        
+        # Format the response to exactly mimic the Google API structure your script.js expects
+        return {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {
+                                "text": response.text
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    except Exception as e:
+        return {"error": str(e)}, 500

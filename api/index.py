@@ -12,6 +12,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# 2. Universal Preflight Catch-all (Overriding default options block smoothly)
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(request: Request, rest_of_path: str):
+    response = Response()
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS, DELETE, PUT"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 

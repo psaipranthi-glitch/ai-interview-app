@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   if (req.method !== "POST") {
     return res.status(200).json({ error: "Use POST request" });
   }
@@ -33,4 +33,4 @@ export default async function handler(req, res) {
       error: error.message
     });
   }
-}
+};

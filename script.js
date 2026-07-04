@@ -29,6 +29,23 @@ function setButtonState(actionType, isLoading, defaultText) {
     }
 }
 
+// ================= HELPER: SAFELY EXTRACT ERROR STRING =================
+function getCleanErrorMessage(errorData) {
+    if (!errorData) return "Unknown Error";
+    if (typeof errorData === 'string') return errorData;
+    
+    // If it's a dictionary object with a specific message key
+    if (errorData.message) return String(errorData.message);
+    if (errorData.details) return String(errorData.details);
+    
+    // Fallback: safe extraction without causing [object Object]
+    try {
+        return JSON.stringify(errorData);
+    } catch (e) {
+        return String(errorData);
+    }
+}
+
 // ================= START INTERVIEW =================
 window.startInterview = async function () {
     currentRole = document.getElementById("role").value;
@@ -41,7 +58,6 @@ window.startInterview = async function () {
     addMessage("bot", "🚀 Interview Started");
     addMessage("bot", "🧠 Role: " + currentRole);
 
-    // Disable start button to prevent double-click API spam
     setButtonState("start", true, "🎯 Start Interview");
 
     await generateQuestions(currentRole);
@@ -61,7 +77,6 @@ async function generateQuestions(role) {
             })
         });
 
-        // Catch direct HTTP 429 Rate Limit responses
         if (res.status === 429) {
             addMessage("bot", "⏳ API rate limit reached. The AI is a bit busy. Please wait 60 seconds before trying to start again!");
             return;
@@ -69,10 +84,8 @@ async function generateQuestions(role) {
 
         const data = await res.json();
 
-        // FIX FOR THE OBJECT ERROR IN 1d23836f-2b85-4ea8-9865-6f652b3a6aca
         if (data.error) {
-            const errorStr = typeof data.error === 'object' ? JSON.stringify(data.error) : String(data.error);
-            
+            const errorStr = getCleanErrorMessage(data.error);
             if (errorStr.includes("429") || errorStr.toLowerCase().includes("quota")) {
                 addMessage("bot", "⏳ Shared API Quota exhausted. Please take a 60-second break before retrying.");
             } else {
@@ -87,12 +100,9 @@ async function generateQuestions(role) {
         }
 
         let text = data.candidates[0].content.parts[0].text;
-
-        // Strips out Markdown wrapper blocks (```json ... ```) safely
         const cleanText = text.replace(/```json|```/g, "").trim();
         questions = JSON.parse(cleanText);
 
-        // Guardrail check to verify the AI actually sent back an array
         if (!Array.isArray(questions) || questions.length === 0) {
             throw new Error("Invalid format: Expected a JSON array.");
         }
@@ -120,14 +130,15 @@ function showQuestion() {
 
 // ================= SEND ANSWER =================
 window.sendAnswer = async function () {
-    const answer = document.getElementById("answer").value.trim();
+    // Captures input text safely even if it came from voice
+    const answerElement = document.getElementById("answer");
+    const answer = answerElement ? answerElement.value.trim() : "";
     if (!answer) return;
 
-    // Lock the submit action immediately to prevent multiple clicks
     setButtonState("send", true, "🚀 Submit");
 
     addMessage("user", answer);
-    document.getElementById("answer").value = "";
+    if (answerElement) answerElement.value = "";
 
     try {
         const res = await fetch(BACKEND_URL, {
@@ -142,10 +153,9 @@ Return JSON with score, feedback, improvement, correct_answer`
             })
         });
 
-        // Smart mitigation: If evaluating hits a rate limit, show message and auto-retry
         if (res.status === 429) {
             addMessage("bot", "⏳ API busy. Holding your response and auto-retrying submission in 10 seconds...");
-            document.getElementById("answer").value = answer; 
+            if (answerElement) answerElement.value = answer; 
             setButtonState("send", false, "🚀 Submit");
             
             setTimeout(window.sendAnswer, 10000);
@@ -154,8 +164,9 @@ Return JSON with score, feedback, improvement, correct_answer`
 
         const data = await res.json();
 
+        // FIXED EVALUATION ERROR LOOKUP FOR 69715e7f-5dd5-4455-8fd2-3cc3ef46921a
         if (data.error) {
-            const errorStr = typeof data.error === 'object' ? JSON.stringify(data.error) : String(data.error);
+            const errorStr = getCleanErrorMessage(data.error);
             addMessage("bot", "❌ Evaluation Error: " + errorStr);
             setButtonState("send", false, "🚀 Submit");
             return;
@@ -168,12 +179,9 @@ Return JSON with score, feedback, improvement, correct_answer`
         }
 
         let text = data.candidates[0].content.parts[0].text;
-
-        // Strips out Markdown wrapper blocks safely
         const cleanText = text.replace(/```json|```/g, "").trim();
         let result = JSON.parse(cleanText);
 
-        // Force the score to be treated as a number to prevent string concatenation bugs
         const numericScore = Number(result.score);
         scores.push(isNaN(numericScore) ? 0 : numericScore);
 

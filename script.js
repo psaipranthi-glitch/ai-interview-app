@@ -6,7 +6,7 @@ let scores = [];
 let questions = [];
 
 // Define your Render backend domain here (DO NOT include a trailing slash)
-const BACKEND_URL = "https://your-app-name.onrender.com";
+const BACKEND_URL = "https://ai-interview-app-1-ttf9.onrender.com/";
 
 // ================= START INTERVIEW =================
 window.startInterview = async function () {

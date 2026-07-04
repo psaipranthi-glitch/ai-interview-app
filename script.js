@@ -5,8 +5,8 @@ let currentQuestion = "";
 let scores = [];
 let questions = [];
 
-// Your live Render backend domain (No trailing slash)
-const BACKEND_URL = "https://ai-interview-app-1-ttf9.onrender.com";
+// FOR VERCEL ONLY: Using a relative path links your frontend directly to your Vercel Python serverless functions
+const BACKEND_URL = "/api/gemini";
 
 // ================= START INTERVIEW =================
 window.startInterview = async function () {
@@ -27,8 +27,7 @@ window.startInterview = async function () {
 // ================= GENERATE QUESTIONS =================
 async function generateQuestions(role) {
     try {
-        // Pointing directly to your live Render backend
-        const res = await fetch(`${BACKEND_URL}/api/gemini`, {
+        const res = await fetch(BACKEND_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -84,8 +83,7 @@ window.sendAnswer = async function () {
     document.getElementById("answer").value = "";
 
     try {
-        // Pointing directly to your live Render backend
-        const res = await fetch(`${BACKEND_URL}/api/gemini`, {
+        const res = await fetch(BACKEND_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -148,7 +146,7 @@ function addMessage(sender, text) {
 }
 
 // ================= VOICE FIX =================
-let recognition = null; // Global reference prevents Safari from cleaning it up mid-speech
+let recognition = null; 
 
 window.startVoice = function () {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -158,15 +156,13 @@ window.startVoice = function () {
         return;
     }
 
-    // Safely abort an active context instance if clicked rapidly
     if (recognition) {
         try { recognition.abort(); } catch(e) {}
     }
 
-    recognition = new SpeechRecognition();
+    recognition = new Recognition = new SpeechRecognition();
     recognition.lang = "en-US";
     
-    // Explicit streaming properties ensure Safari Mobile wakes up instantly
     recognition.continuous = false;
     recognition.interimResults = false; 
 
@@ -188,7 +184,6 @@ window.startVoice = function () {
         }
     };
 
-    // Fired cleanly inside user interaction execution boundary to bypass iOS restrictions
     try {
         recognition.start();
     } catch (err) {

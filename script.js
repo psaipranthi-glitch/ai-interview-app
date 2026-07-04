@@ -160,7 +160,8 @@ window.startVoice = function () {
         try { recognition.abort(); } catch(e) {}
     }
 
-    recognition = new Recognition = new SpeechRecognition();
+    // TYPO FIXED HERE: Clean initialization 
+    recognition = new SpeechRecognition();
     recognition.lang = "en-US";
     
     recognition.continuous = false;

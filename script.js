@@ -8,27 +8,6 @@ let questions = [];
 // FOR VERCEL ONLY: Using a relative path links your frontend directly to your Vercel Python serverless functions
 const BACKEND_URL = "/api/gemini";
 
-// ================= HELPER: SAFE BUTTON LOADING STATES =================
-function setButtonState(actionType, isLoading, defaultText) {
-    let btn = null;
-    
-    if (actionType === "start") {
-        btn = document.querySelector("button[onclick*='startInterview']");
-    } else if (actionType === "send") {
-        btn = document.querySelector("button[onclick*='sendAnswer']");
-    }
-
-    if (!btn) return;
-
-    if (isLoading) {
-        btn.disabled = true;
-        btn.innerText = "⏳ Processing...";
-    } else {
-        btn.disabled = false;
-        btn.innerText = defaultText;
-    }
-}
-
 // ================= START INTERVIEW =================
 window.startInterview = async function () {
     currentRole = document.getElementById("role").value;
@@ -41,12 +20,7 @@ window.startInterview = async function () {
     addMessage("bot", "🚀 Interview Started");
     addMessage("bot", "🧠 Role: " + currentRole);
 
-    // Disable start button to prevent double-click API spam
-    setButtonState("start", true, "🎯 Start Interview");
-
     await generateQuestions(currentRole);
-    
-    setButtonState("start", false, "🎯 Start Interview");
     showQuestion();
 };
 
@@ -61,23 +35,7 @@ async function generateQuestions(role) {
             })
         });
 
-        // Catch direct HTTP 429 Rate Limit responses
-        if (res.status === 429) {
-            addMessage("bot", "⏳ API rate limit reached. The AI is a bit busy. Please wait 60 seconds before trying to start again!");
-            return;
-        }
-
         const data = await res.json();
-
-        // Handle internal exceptions passed back as an error object
-        if (data.error) {
-            if (data.error.includes("429") || data.error.toLowerCase().includes("quota")) {
-                addMessage("bot", "⏳ Shared API Quota exhausted. Please take a 60-second break before retrying.");
-            } else {
-                addMessage("bot", "❌ Backend Error: " + data.error);
-            }
-            return;
-        }
 
         if (!data.candidates || !data.candidates.length) {
             addMessage("bot", "❌ AI failed to generate questions");
@@ -99,7 +57,7 @@ async function generateQuestions(role) {
 
     } catch (err) {
         console.error("Error generating questions:", err);
-        addMessage("bot", "❌ Connection timed out. Please try again in a few seconds.");
+        addMessage("bot", "❌ Error generating questions");
     }
 }
 
@@ -121,9 +79,6 @@ window.sendAnswer = async function () {
     const answer = document.getElementById("answer").value.trim();
     if (!answer) return;
 
-    // Lock the submit action immediately to prevent multiple clicks
-    setButtonState("send", true, "🚀 Submit");
-
     addMessage("user", answer);
     document.getElementById("answer").value = "";
 
@@ -140,27 +95,10 @@ Return JSON with score, feedback, improvement, correct_answer`
             })
         });
 
-        // Smart mitigation: If evaluating hits a rate limit, show message and auto-retry
-        if (res.status === 429) {
-            addMessage("bot", "⏳ API busy. Holding your response and auto-retrying submission in 10 seconds...");
-            document.getElementById("answer").value = answer; 
-            setButtonState("send", false, "🚀 Submit");
-            
-            setTimeout(window.sendAnswer, 10000);
-            return;
-        }
-
         const data = await res.json();
-
-        if (data.error) {
-            addMessage("bot", "❌ Evaluation Error: " + data.error);
-            setButtonState("send", false, "🚀 Submit");
-            return;
-        }
 
         if (!data.candidates || !data.candidates.length) {
             addMessage("bot", "❌ AI failed to evaluate");
-            setButtonState("send", false, "🚀 Submit");
             return;
         }
 
@@ -182,9 +120,7 @@ Return JSON with score, feedback, improvement, correct_answer`
 
     } catch (err) {
         console.error("Error evaluating answer:", err);
-        addMessage("bot", "❌ API Error occurred processing evaluation.");
-    } finally {
-        setButtonState("send", false, "🚀 Submit");
+        addMessage("bot", "❌ API Error");
     }
 };
 

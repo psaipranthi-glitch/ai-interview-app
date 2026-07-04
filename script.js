@@ -5,9 +5,11 @@ let currentQuestion = "";
 let scores = [];
 let questions = [];
 
+// Define your Render backend domain here (DO NOT include a trailing slash)
+const BACKEND_URL = "https://your-app-name.onrender.com";
+
 // ================= START INTERVIEW =================
 window.startInterview = async function () {
-
     currentRole = document.getElementById("role").value;
     currentIndex = 0;
     scores = [];
@@ -24,10 +26,9 @@ window.startInterview = async function () {
 
 // ================= GENERATE QUESTIONS =================
 async function generateQuestions(role) {
-
     try {
-
-        const res = await fetch("/api/gemini", {
+        // Pointing directly to Render backend with a clean POST request
+        const res = await fetch(`${BACKEND_URL}/api/gemini`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -44,11 +45,11 @@ async function generateQuestions(role) {
 
         let text = data.candidates[0].content.parts[0].text;
 
-        // FIXED: Strips out Markdown wrapper blocks (```json ... ```) safely
+        // Strips out Markdown wrapper blocks (```json ... ```) safely
         const cleanText = text.replace(/```json|```/g, "").trim();
         questions = JSON.parse(cleanText);
 
-        // FIXED: Guardrail check to verify the AI actually sent back an array
+        // Guardrail check to verify the AI actually sent back an array
         if (!Array.isArray(questions) || questions.length === 0) {
             throw new Error("Invalid format: Expected a JSON array.");
         }
@@ -63,7 +64,6 @@ async function generateQuestions(role) {
 
 // ================= SHOW QUESTION =================
 function showQuestion() {
-
     currentQuestion = questions[currentIndex];
 
     if (!currentQuestion) {
@@ -77,7 +77,6 @@ function showQuestion() {
 
 // ================= SEND ANSWER =================
 window.sendAnswer = async function () {
-
     const answer = document.getElementById("answer").value.trim();
     if (!answer) return;
 
@@ -85,8 +84,8 @@ window.sendAnswer = async function () {
     document.getElementById("answer").value = "";
 
     try {
-
-        const res = await fetch("/api/gemini", {
+        // Pointing directly to Render backend with a clean POST request
+        const res = await fetch(`${BACKEND_URL}/api/gemini`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -107,11 +106,11 @@ Return JSON with score, feedback, improvement, correct_answer`
 
         let text = data.candidates[0].content.parts[0].text;
 
-        // FIXED: Strips out Markdown wrapper blocks safely
+        // Strips out Markdown wrapper blocks safely
         const cleanText = text.replace(/```json|```/g, "").trim();
         let result = JSON.parse(cleanText);
 
-        // FIXED: Force the score to be treated as a number to prevent string concatenation bugs
+        // Force the score to be treated as a number to prevent string concatenation bugs
         const numericScore = Number(result.score);
         scores.push(isNaN(numericScore) ? 0 : numericScore);
 
@@ -129,7 +128,6 @@ Return JSON with score, feedback, improvement, correct_answer`
 
 // ================= FINAL RESULT =================
 function showFinalResult() {
-
     let total = scores.reduce((a, b) => a + b, 0);
     let avg = scores.length ? (total / scores.length).toFixed(1) : 0;
 
@@ -139,7 +137,6 @@ function showFinalResult() {
 
 // ================= UI =================
 function addMessage(sender, text) {
-
     const chatBox = document.getElementById("chatBox");
 
     const msg = document.createElement("div");
@@ -151,25 +148,50 @@ function addMessage(sender, text) {
 }
 
 // ================= VOICE FIX =================
-window.startVoice = function () {
+let recognition = null; // Global reference prevents Safari from cleaning it up mid-speech
 
+window.startVoice = function () {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-        alert("Speech not supported");
+        alert("Speech recognition is not supported on this browser. Try Chrome or Safari Mobile.");
         return;
     }
 
-    const recognition = new SpeechRecognition();
+    // Safely abort an active context instance if clicked rapidly
+    if (recognition) {
+        try { recognition.abort(); } catch(e) {}
+    }
+
+    recognition = new SpeechRecognition();
     recognition.lang = "en-US";
-    recognition.start();
+    
+    // Explicit streaming properties ensure Safari Mobile wakes up instantly
+    recognition.continuous = false;
+    recognition.interimResults = false; 
+
+    addMessage("bot", "🎙️ Listening...");
 
     recognition.onresult = function (event) {
-        document.getElementById("answer").value =
-            event.results[0][0].transcript;
+        if (event.results && event.results[0] && event.results[0][0]) {
+            const speechText = event.results[0][0].transcript;
+            document.getElementById("answer").value = speechText;
+        }
     };
 
-    recognition.onerror = function () {
-        addMessage("bot", "❌ Voice error");
+    recognition.onerror = function (event) {
+        console.error("Speech Recognition Error:", event.error);
+        if (event.error === 'not-allowed') {
+            addMessage("bot", "❌ Microphone permission denied.");
+        } else {
+            addMessage("bot", "❌ Voice error: " + event.error);
+        }
     };
+
+    // Fired cleanly inside user interaction execution boundary
+    try {
+        recognition.start();
+    } catch (err) {
+        console.error("Failed to start recognition:", err);
+    }
 };

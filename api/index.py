@@ -1,59 +1,55 @@
-from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-import google.generativeai as genai
 import os
+from fastapi import FastAPI
+from pydantic import BaseModel
+from groq import Groq
+from dotenv import load_dotenv
+
+# Automatically loads a local .env file if it exists on your machine
+load_dotenv()
 
 app = FastAPI()
 
-# 1. Clean CORS Setup
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,  # Set to False to ensure Safari doesn't block unauthenticated cross-origin calls
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Groq automatically picks up the 'GROQ_API_KEY' environment variable
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-# 2. Universal Preflight Catch-all for Safari/Chrome Handshakes
-@app.options("/{rest_of_path:path}")
-async def preflight_handler(request: Request, rest_of_path: str):
-    response = Response()
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS, DELETE, PUT"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
+class InterviewRequest(BaseModel):
+    prompt: str
 
-# Configure Gemini
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-
-# 3. Your Post Route
-@app.post("/api/gemini")
-async def handle_gemini(request_data: dict):
+@app.post("/api/gemini") # Keeping this route identical means NO changes are needed in script.js!
+async def handle_interview(request: InterviewRequest):
     try:
-        prompt = request_data.get("prompt", "")
+        # Call the Groq SDK using the highly reliable Llama 3.1 8B model
+        chat_completion = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert technical interviewer. Always respond strictly in valid JSON format as requested."
+                },
+                {
+                    "role": "user",
+                    "content": request.prompt
+                }
+            ],
+            response_format={"type": "json_object"} # Forces the model to output clean JSON
+        )
         
-        if not prompt:
-            raise HTTPException(status_code=400, detail="Prompt is required")
-            
-        # Call the Gemini model
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(prompt)
+        # Format the response payload so your frontend script.js reads it flawlessly
+        ai_response = chat_completion.choices[0].message.content
         
-        # Format response structure exactly to mimic what your script.js expects
         return {
             "candidates": [
                 {
                     "content": {
                         "parts": [
                             {
-                                "text": response.text
+                                "text": ai_response
                             }
                         ]
                     }
                 }
             ]
         }
+        
     except Exception as e:
-        # Proper FastAPI JSON error formatting
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return {"error": str(e)}

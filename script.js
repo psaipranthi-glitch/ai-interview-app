@@ -5,8 +5,8 @@ let currentQuestion = "";
 let scores = [];
 let questions = [];
 
-// Define your Render backend domain here (DO NOT include a trailing slash)
-const BACKEND_URL = "https://ai-interview-app-1-ttf9.onrender.com/";
+// Your live Render backend domain (No trailing slash)
+const BACKEND_URL = "https://ai-interview-app-1-ttf9.onrender.com";
 
 // ================= START INTERVIEW =================
 window.startInterview = async function () {
@@ -27,7 +27,7 @@ window.startInterview = async function () {
 // ================= GENERATE QUESTIONS =================
 async function generateQuestions(role) {
     try {
-        // Pointing directly to Render backend with a clean POST request
+        // Pointing directly to your live Render backend
         const res = await fetch(`${BACKEND_URL}/api/gemini`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -84,7 +84,7 @@ window.sendAnswer = async function () {
     document.getElementById("answer").value = "";
 
     try {
-        // Pointing directly to Render backend with a clean POST request
+        // Pointing directly to your live Render backend
         const res = await fetch(`${BACKEND_URL}/api/gemini`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -188,7 +188,7 @@ window.startVoice = function () {
         }
     };
 
-    // Fired cleanly inside user interaction execution boundary
+    // Fired cleanly inside user interaction execution boundary to bypass iOS restrictions
     try {
         recognition.start();
     } catch (err) {

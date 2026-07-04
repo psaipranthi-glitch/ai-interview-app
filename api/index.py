@@ -1,18 +1,21 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import google.generativeai as genai
 import os
 
 app = FastAPI()
 
+# 1. Clean CORS Setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,  # Set to False to ensure Safari doesn't block unauthenticated cross-origin calls
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# 2. Universal Preflight Catch-all (Overriding default options block smoothly)
+
+# 2. Universal Preflight Catch-all for Safari/Chrome Handshakes
 @app.options("/{rest_of_path:path}")
 async def preflight_handler(request: Request, rest_of_path: str):
     response = Response()
@@ -21,18 +24,23 @@ async def preflight_handler(request: Request, rest_of_path: str):
     response.headers["Access-Control-Allow-Headers"] = "*"
     return response
 
+# Configure Gemini
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
+# 3. Your Post Route
 @app.post("/api/gemini")
 async def handle_gemini(request_data: dict):
     try:
         prompt = request_data.get("prompt", "")
         
+        if not prompt:
+            raise HTTPException(status_code=400, detail="Prompt is required")
+            
         # Call the Gemini model
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(prompt)
         
-        # Format the response to exactly mimic the Google API structure your script.js expects
+        # Format response structure exactly to mimic what your script.js expects
         return {
             "candidates": [
                 {
@@ -47,4 +55,5 @@ async def handle_gemini(request_data: dict):
             ]
         }
     except Exception as e:
-        return {"error": str(e)}, 500
+        # Proper FastAPI JSON error formatting
+        return JSONResponse(status_code=500, content={"error": str(e)})
